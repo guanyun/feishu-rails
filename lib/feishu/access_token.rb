@@ -76,7 +76,6 @@ module Feishu
             app_secret: Feishu.config.app_secret,
           }.to_json,
         )
-      puts "response ==================", response
       Redis.current.setex(
         tenant_access_token_key,
         response['expire'] - 5,
