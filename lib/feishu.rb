@@ -5,6 +5,7 @@ require 'feishu/config'
 
 module Feishu
   class AccessTokenExpiredError < RuntimeError; end
+  class AccessTokenRetryExceededError < RuntimeError; end
   class UserTokenNeedRefresh < RuntimeError; end
   class UserTokenExpiredError < RuntimeError; end
 

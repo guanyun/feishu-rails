@@ -6,6 +6,8 @@ module Feishu
 
     disable_rails_query_string_format
 
+    MAX_TOKEN_RETRIES = 3
+
     def initialize(authorization = nil)
 
       return self.class.default_options.merge!(
@@ -18,25 +20,18 @@ module Feishu
     end
 
     def get(path, query: {})
-      response = self.class.get(path, query: query)
-      handle_response(response.parsed_response)
-    rescue Feishu::AccessTokenExpiredError
-      AccessToken.new.clear_cache
-      retry
+      request_with_token_retry { self.class.get(path, query: query) }
     end
 
     def post(path, multipart: false, query:{}, body: {})
-      response =
+      request_with_token_retry do
         self.class.post(
           path,
           multipart: multipart,
           query: query,
           body: multipart ? body : body.to_json,
         )
-      handle_response(response.parsed_response)
-    rescue Feishu::AccessTokenExpiredError
-      AccessToken.new.clear_cache
-      retry
+      end
     end
 
     def change_request_header(authentication)
@@ -49,6 +44,19 @@ module Feishu
     end
 
     private
+
+    def request_with_token_retry
+      retries = 0
+      loop do
+        response = yield
+        return handle_response(response.parsed_response)
+      rescue Feishu::AccessTokenExpiredError
+        retries += 1
+        raise Feishu::AccessTokenRetryExceededError if retries > MAX_TOKEN_RETRIES
+
+        AccessToken.new.clear_cache
+      end
+    end
 
     def handle_response(response)
       case response['code']
