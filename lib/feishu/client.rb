@@ -6,7 +6,7 @@ module Feishu
 
     disable_rails_query_string_format
 
-    MAX_TOKEN_RETRIES = 3
+    MAX_TOKEN_RETRIES = 10
 
     def initialize(authorization = nil)
 
