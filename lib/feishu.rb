@@ -24,6 +24,7 @@ module Feishu
   def config
     begin
       subco = Thread.current['company']
+      puts "FeishuRailsGem config subco: #{subco}"
       feishu_config = Config.for(:feishu)
 
       selected_config = subco.blank? ?  feishu_config : feishu_config[subco]
