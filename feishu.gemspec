@@ -29,4 +29,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'httparty'
   spec.add_dependency 'anyway_config'
   spec.add_dependency 'redis'
+
+  spec.add_development_dependency 'rspec', '~> 3.12'
+  spec.add_development_dependency 'activesupport', '>= 6.0'
 end

@@ -10,6 +10,7 @@ module Feishu
                 :approval_uri,
                 :message_uri,
                 :contact_uri,
-                :im_uri
+                :im_uri,
+                :redis_url
   end
 end
