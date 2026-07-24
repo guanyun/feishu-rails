@@ -21,10 +21,17 @@ module Feishu
 
   module_function
 
+  def redis
+    @redis ||= Redis.new(url: ENV.fetch('REDIS_URL', 'redis://127.0.0.1:6379/0'))
+  end
+
+  def redis=(client)
+    @redis = client
+  end
+
   def config
     begin
       subco = Thread.current['company']
-      puts "FeishuRailsGem config subco: #{subco}"
       feishu_config = Config.for(:feishu)
 
       selected_config = subco.blank? ?  feishu_config : feishu_config[subco]

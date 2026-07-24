@@ -9,21 +9,21 @@ module Feishu
     end
 
     def tenant_access_token
-      Redis.current.get(tenant_access_token_key) || _tenant_access_token
+      Feishu.redis.get(tenant_access_token_key) || _tenant_access_token
     end
 
     def app_access_token
-      Redis.current.get(app_access_token_key) || _app_access_token
+      Feishu.redis.get(app_access_token_key) || _app_access_token
     end
 
     def jsapi_ticket
-      Redis.current.get(jsapi_ticket_key) || _jsapi_ticket
+      Feishu.redis.get(jsapi_ticket_key) || _jsapi_ticket
     end
 
     def clear_cache
-      Redis.current.del(tenant_access_token_key)
-      Redis.current.del(app_access_token_key)
-      Redis.current.del(jsapi_ticket_key)
+      Feishu.redis.del(tenant_access_token_key)
+      Feishu.redis.del(app_access_token_key)
+      Feishu.redis.del(jsapi_ticket_key)
     end
 
     def user_access_token(grant_type: 'authorization_code', code:)
@@ -59,7 +59,7 @@ module Feishu
             app_secret: Feishu.config.app_secret,
           }.to_json,
         )
-      Redis.current.setex(
+      Feishu.redis.setex(
         tenant_access_token_key,
         response['expire'] - 5,
         response['tenant_access_token'],
@@ -76,12 +76,12 @@ module Feishu
             app_secret: Feishu.config.app_secret,
           }.to_json,
         )
-      Redis.current.setex(
-        tenant_access_token_key,
+      Feishu.redis.setex(
+        app_access_token_key,
         response['expire'] - 5,
-        response['tenant_access_token'],
+        response['app_access_token'],
       )
-      response['tenant_access_token']
+      response['app_access_token']
     end
 
     def _jsapi_ticket
@@ -93,7 +93,7 @@ module Feishu
             "Content-Type": 'application/json',
           },
         )
-      Redis.current.setex(
+      Feishu.redis.setex(
         jsapi_ticket_key,
         response['data']['expire_in'] - 5,
         response['data']['ticket'],
