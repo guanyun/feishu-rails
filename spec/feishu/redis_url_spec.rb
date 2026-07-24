@@ -13,21 +13,21 @@ RSpec.describe "Feishu.redis_url" do
   end
 
   it "prefers config.redis_url over ENV" do
-    allow(Feishu).to receive(:config).and_return(OpenStruct.new(redis_url: "redis://from-config/3"))
+    allow(Feishu).to receive(:config).and_return(double(redis_url: "redis://from-config/3"))
     ENV["REDIS_URL"] = "redis://from-env/3"
 
     expect(Feishu.redis_url).to eq("redis://from-config/3")
   end
 
   it "falls back to ENV['REDIS_URL'] when config has no redis_url" do
-    allow(Feishu).to receive(:config).and_return(OpenStruct.new)
+    allow(Feishu).to receive(:config).and_return(double(redis_url: nil))
     ENV["REDIS_URL"] = "redis://from-env/3"
 
     expect(Feishu.redis_url).to eq("redis://from-env/3")
   end
 
   it "raises when neither config.redis_url nor ENV['REDIS_URL'] is set" do
-    allow(Feishu).to receive(:config).and_return(OpenStruct.new)
+    allow(Feishu).to receive(:config).and_return(double(redis_url: nil))
     ENV.delete("REDIS_URL")
 
     expect { Feishu.redis_url }.to raise_error(
