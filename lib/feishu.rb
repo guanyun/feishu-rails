@@ -19,12 +19,23 @@ module Feishu
     end
   end
 
+  # Align with eagle ReadCache default when REDIS_URL is unset.
+  DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379/3'
+
   module_function
+
+  def redis_url
+    configured = config.redis_url if config.respond_to?(:redis_url)
+    configured.presence || ENV['REDIS_URL'].presence || DEFAULT_REDIS_URL
+  end
+
+  def redis
+    @redis ||= Redis.new(url: redis_url)
+  end
 
   def config
     begin
       subco = Thread.current['company']
-      puts "FeishuRailsGem config subco: #{subco}"
       feishu_config = Config.for(:feishu)
 
       selected_config = subco.blank? ?  feishu_config : feishu_config[subco]
