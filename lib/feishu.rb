@@ -19,14 +19,14 @@ module Feishu
     end
   end
 
-  # Align with eagle ReadCache default when REDIS_URL is unset.
-  DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379/3'
-
   module_function
 
   def redis_url
     configured = config.redis_url if config.respond_to?(:redis_url)
-    configured.presence || ENV['REDIS_URL'].presence || DEFAULT_REDIS_URL
+    url = configured.presence || ENV['REDIS_URL'].presence
+    return url if url
+
+    raise ArgumentError, "Feishu redis_url is missing: set config.redis_url or ENV['REDIS_URL']"
   end
 
   def redis
