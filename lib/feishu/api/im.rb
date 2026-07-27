@@ -8,6 +8,15 @@ module Feishu
           body: { receive_id: receive_id, content: content, msg_type: msg_type }
         )
       end
+
+      def delete_message(message_id)
+        delete("/messages/#{message_id}")
+      end
+
+      def update_message(message_id, content: {})
+        patch("/messages/#{message_id}", body: { content: content })
+      end
     end
   end
 end
+

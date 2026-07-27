@@ -32,6 +32,19 @@ module Feishu
           body: { requests: requests },
         )
       end
+
+      def put_values(spreadsheet_token, sheet_id, range, values)
+        put(
+          "/sheets/v2/spreadsheets/#{spreadsheet_token}/values",
+          body: {
+            valueRange: {
+              range: "#{sheet_id}!#{range}",
+              values: values
+            }
+          }
+        )
+      end
     end
   end
 end
+

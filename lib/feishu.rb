@@ -1,5 +1,6 @@
 require 'httparty'
 require 'redis'
+require 'json'
 require 'feishu/version'
 require 'feishu/config'
 

@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    feishu (0.1.0)
+    feishu (0.1.2)
       anyway_config
       httparty
       redis
