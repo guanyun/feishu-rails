@@ -5,12 +5,7 @@ module Feishu
     include Feishu::Api::Sheets
 
     def initialize
-      self.class.default_options.merge!(
-        headers: {
-          "Authorization": "Bearer #{AccessToken.new.tenant_access_token}",
-          "Content-Type": 'application/json; charset=utf-8',
-        },
-      )
+      super
       self.class.base_uri(Feishu.config.uri)
     end
   end

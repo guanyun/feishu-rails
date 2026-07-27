@@ -47,6 +47,7 @@ module Feishu
   end
 end
 
+require 'feishu/request_logger'
 require 'feishu/access_token'
 require 'feishu/client'
 require 'feishu/user_client'

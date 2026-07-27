@@ -2,15 +2,24 @@
 
 require 'spec_helper'
 require 'json'
+require 'tmpdir'
 
 RSpec.describe Feishu::Client do
   let(:access_token) { instance_double(Feishu::AccessToken) }
+  let(:log_dir) { Dir.mktmpdir }
 
   before do
+    allow(Feishu::RequestLogger).to receive(:log_path).and_return(File.join(log_dir, 'feishu_api.log'))
+    Feishu::RequestLogger.reset!
     allow(Feishu::AccessToken).to receive(:new).and_return(access_token)
     allow(access_token).to receive(:tenant_access_token).and_return('tenant-token-1', 'tenant-token-2')
     allow(access_token).to receive(:clear_cache)
     allow(Feishu::Client).to receive(:default_options).and_return({})
+  end
+
+  after do
+    Feishu::RequestLogger.reset!
+    FileUtils.remove_entry(log_dir) if Dir.exist?(log_dir)
   end
 
   describe '#get token retry' do
@@ -33,6 +42,32 @@ RSpec.describe Feishu::Client do
       expect(Feishu::Client).to have_received(:get).twice
       expect(access_token).to have_received(:clear_cache).once
       expect(access_token).to have_received(:tenant_access_token).twice
+    end
+
+    it 'logs both the failed attempt and the successful retry' do
+      log_file = File.join(log_dir, 'feishu_api.log')
+      File.write(log_file, '') if File.exist?(log_file)
+      stub_get_responses(expired, ok)
+
+      client.get('/ping')
+
+      entries =
+        File.read(log_file).split(/\n\n+/).reject(&:empty?).map do |block|
+          block.each_line.each_with_object({}) do |line, memo|
+            line = line.sub(/\A\[[^\]]+\]\s*/, '').strip
+            next if line.empty?
+
+            key, value = line.split('=', 2)
+            memo[key] = value
+          end
+        end
+
+      expect(entries.size).to eq(2)
+      expect(entries[0]).to include(
+        'success' => 'false',
+        'error_class' => 'Feishu::AccessTokenExpiredError'
+      )
+      expect(entries[1]).to include('success' => 'true')
     end
 
     it 'raises after the second AccessTokenExpiredError' do

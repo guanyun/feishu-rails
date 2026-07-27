@@ -59,35 +59,20 @@ module Feishu
     private
 
     def request(http_method, path, multipart: false, query: {}, body: {})
-      with_token_retry do
-        raw =
-          case http_method
-          when :get
-            self.class.get(path, query: query)
-          when :delete
-            self.class.delete(path, query: query, body: body)
-          when :post, :put
-            self.class.public_send(
-              http_method,
-              path,
-              multipart: multipart,
-              query: query,
-              body: multipart ? body : body.to_json
-            )
-          when :patch
-            self.class.patch(path, query: query, body: body.to_json)
-          else
-            raise ArgumentError, "unsupported http method: #{http_method}"
-          end
-        handle_response(raw.parsed_response)
-      end
-    end
-
-    # tenant token 过期时最多再试 1 次；user token 客户端不自动重试。
-    def with_token_retry
       retries = 0
+      params = request_params(multipart: multipart, query: query, body: body)
+
       begin
-        yield
+        RequestLogger.track(
+          client: self.class.name,
+          method: http_method,
+          path: path,
+          params: params
+        ) do
+          handle_response(
+            send_http(http_method, path, multipart: multipart, query: query, body: body).parsed_response
+          )
+        end
       rescue Feishu::AccessTokenExpiredError
         raise if user_authorized? || retries >= MAX_TOKEN_RETRIES
 
@@ -96,6 +81,39 @@ module Feishu
         refresh_tenant_authorization!
         retry
       end
+    end
+
+    def send_http(http_method, path, multipart:, query:, body:)
+      case http_method
+      when :get
+        self.class.get(path, query: query)
+      when :delete
+        self.class.delete(path, query: query, body: body)
+      when :post, :put
+        self.class.public_send(
+          http_method,
+          path,
+          multipart: multipart,
+          query: query,
+          body: multipart ? body : body.to_json
+        )
+      when :patch
+        self.class.patch(path, query: query, body: body.to_json)
+      else
+        raise ArgumentError, "unsupported http method: #{http_method}"
+      end
+    end
+
+    def request_params(multipart:, query:, body:)
+      params = {}
+      params[:query] = query unless query.nil? || query.empty?
+      if multipart
+        params[:multipart] = true
+        params[:body_keys] = body.is_a?(Hash) ? body.keys : body.class.name
+      elsif !body.nil? && body != {}
+        params[:body] = body
+      end
+      params.empty? ? nil : params
     end
 
     def user_authorized?
