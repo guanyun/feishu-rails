@@ -2,6 +2,7 @@ require 'httparty'
 require 'redis'
 require 'json'
 require 'ostruct'
+require 'active_support/core_ext/object/blank'
 require 'feishu/version'
 require 'feishu/config'
 
@@ -27,9 +28,7 @@ module Feishu
   module_function
 
   def redis_url
-    configured_url = config(DEFAULT_APP).redis_url
-    url = configured_url unless configured_url.nil? || configured_url == ''
-    url ||= ENV['REDIS_URL'] unless ENV['REDIS_URL'].nil? || ENV['REDIS_URL'] == ''
+    url = Config.for(:feishu)[:redis_url].presence || ENV['REDIS_URL'].presence
     return url if url
 
     raise ArgumentError, "Feishu redis_url is missing: set config.redis_url or ENV['REDIS_URL']"
