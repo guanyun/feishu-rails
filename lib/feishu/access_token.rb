@@ -6,8 +6,11 @@ module Feishu
 
     headers 'Content-Type' => 'application/json'
 
-    def initialize
-      self.class.base_uri(Feishu.config.uri)
+    attr_reader :app, :config
+
+    def initialize(app: Feishu::DEFAULT_APP)
+      @app = Feishu.normalize_app(app)
+      @config = Feishu.config(@app)
     end
 
     def tenant_access_token
@@ -32,7 +35,7 @@ module Feishu
       post(
         '/authen/v1/access_token',
         body: { grant_type: grant_type, code: code },
-        headers: bearer_headers(AccessToken.new.app_access_token)
+        headers: bearer_headers(app_access_token)
       )
     end
 
@@ -40,7 +43,7 @@ module Feishu
       post(
         '/authen/v1/refresh_access_token',
         body: { grant_type: grant_type, refresh_token: refresh_token },
-        headers: bearer_headers(AccessToken.new.app_access_token)
+        headers: bearer_headers(app_access_token)
       )
     end
 
@@ -53,12 +56,14 @@ module Feishu
       options[:headers] = headers if headers
 
       RequestLogger.track(
+        app: app,
+        app_id: config.app_id,
         client: self.class.name,
         method: :post,
         path: path,
         params: body.nil? ? nil : { body: body }
       ) do
-        self.class.post(path, **options)
+        self.class.post(api_url(path), **options)
       end
     end
 
@@ -69,10 +74,14 @@ module Feishu
       }
     end
 
+    def api_url(path)
+      "#{config.uri.to_s.sub(%r{/$}, '')}/#{path.to_s.sub(%r{\A/}, '')}"
+    end
+
     def _tenant_access_token
       body = {
-        app_id: Feishu.config.app_id,
-        app_secret: Feishu.config.app_secret,
+        app_id: config.app_id,
+        app_secret: config.app_secret,
       }
       response = post('/auth/v3/tenant_access_token/internal/', body: body)
       Feishu.redis.setex(
@@ -85,8 +94,8 @@ module Feishu
 
     def _app_access_token
       body = {
-        app_id: Feishu.config.app_id,
-        app_secret: Feishu.config.app_secret,
+        app_id: config.app_id,
+        app_secret: config.app_secret,
       }
       response = post('/auth/v3/app_access_token/internal/', body: body)
       Feishu.redis.setex(
@@ -100,7 +109,7 @@ module Feishu
     def _jsapi_ticket
       response = post(
         '/jssdk/ticket/get',
-        headers: bearer_headers(AccessToken.new.tenant_access_token)
+        headers: bearer_headers(tenant_access_token)
       )
       Feishu.redis.setex(
         jsapi_ticket_key,
@@ -112,7 +121,7 @@ module Feishu
 
     [:app_access_token_key, :tenant_access_token_key, :jsapi_ticket_key].each do |method_name|
       define_method method_name do
-        "#{Thread.current['company']}#{method_name}"
+        "feishu:#{config.app_id}:#{method_name.to_s.delete_suffix('_key')}"
       end
     end
   end

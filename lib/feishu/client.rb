@@ -9,20 +9,21 @@ module Feishu
     disable_rails_query_string_format
 
     MAX_TOKEN_RETRIES = 1
+    BASE_URI_CONFIG_KEY = :uri
+    TOKEN_TYPE = :tenant_access_token
 
-    def initialize(authorization = nil)
-      @user_authorized = !authorization.nil?
+    attr_reader :app, :config
 
-      if authorization
-        change_request_header(authorization)
-      else
-        self.class.default_options.merge!(
-          headers: {
-            "Authorization": "Bearer #{AccessToken.new.tenant_access_token}",
-            "Content-Type": 'application/json',
-          },
-        )
+    def initialize(authorization = nil, app: Feishu::DEFAULT_APP)
+      @app = Feishu.normalize_app(app)
+      @config = Feishu.config(@app)
+      @base_uri = config.public_send(self.class::BASE_URI_CONFIG_KEY)
+      if @base_uri.nil? || @base_uri == ''
+        raise ArgumentError,
+              "Feishu app #{app.inspect} is missing: #{self.class::BASE_URI_CONFIG_KEY}"
       end
+      @user_authorized = !authorization.nil?
+      @authorization = authorization || access_token.public_send(self.class::TOKEN_TYPE)
     end
 
     def get(path, query: {})
@@ -48,12 +49,7 @@ module Feishu
     end
 
     def change_request_header(authentication)
-      self.class.default_options.merge!(
-        headers: {
-          "Authorization": "Bearer #{authentication}",
-          "Content-Type": 'application/json',
-        },
-      )
+      @authorization = authentication
     end
 
     private
@@ -64,6 +60,8 @@ module Feishu
 
       begin
         RequestLogger.track(
+          app: app,
+          app_id: config.app_id,
           client: self.class.name,
           method: http_method,
           path: path,
@@ -77,28 +75,32 @@ module Feishu
         raise if user_authorized? || retries >= MAX_TOKEN_RETRIES
 
         retries += 1
-        AccessToken.new.clear_cache
-        refresh_tenant_authorization!
+        access_token.clear_cache
+        refresh_app_authorization!
         retry
       end
     end
 
     def send_http(http_method, path, multipart:, query:, body:)
+      url = api_url(path)
+      options = { headers: request_headers }
+
       case http_method
       when :get
-        self.class.get(path, query: query)
+        self.class.get(url, **options, query: query)
       when :delete
-        self.class.delete(path, query: query, body: body)
+        self.class.delete(url, **options, query: query, body: body)
       when :post, :put
         self.class.public_send(
           http_method,
-          path,
+          url,
+          **options,
           multipart: multipart,
           query: query,
           body: multipart ? body : body.to_json
         )
       when :patch
-        self.class.patch(path, query: query, body: body.to_json)
+        self.class.patch(url, **options, query: query, body: body.to_json)
       else
         raise ArgumentError, "unsupported http method: #{http_method}"
       end
@@ -120,9 +122,24 @@ module Feishu
       @user_authorized
     end
 
-    # 重新拉取 tenant token 并写回 Authorization。
-    def refresh_tenant_authorization!
-      change_request_header(AccessToken.new.tenant_access_token)
+    def access_token
+      @access_token ||= AccessToken.new(app: app)
+    end
+
+    def api_url(path)
+      "#{@base_uri.to_s.sub(%r{/$}, '')}/#{path.to_s.sub(%r{\A/}, '')}"
+    end
+
+    def request_headers
+      {
+        "Authorization": "Bearer #{@authorization}",
+        "Content-Type": 'application/json',
+      }
+    end
+
+    # 重新拉取当前 app 对应的 token 并写回 Authorization。
+    def refresh_app_authorization!
+      change_request_header(access_token.public_send(self.class::TOKEN_TYPE))
     end
 
     def handle_response(response)

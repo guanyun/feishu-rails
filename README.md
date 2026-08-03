@@ -1,36 +1,73 @@
 # Feishu
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/feishu`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Guanyun 使用的飞书 Ruby API client。
 
 ## Installation
 
-Add this line to your application's Gemfile:
+从 GitHub 安装：
 
 ```ruby
-gem 'feishu'
+gem 'feishu', github: 'guanyun/feishu-rails'
 ```
 
 And then execute:
 
     $ bundle install
 
-Or install it yourself as:
-
-    $ gem install feishu
-
 ## Usage
 
-TODO: Write usage instructions here
+配置以北京应用为根节点，其他应用使用同名子节点：
+
+```yaml
+feishu:
+  app_id: cli_beijing
+  app_secret: beijing_secret
+  uri: https://open.feishu.cn/open-apis
+  approval_uri: https://www.feishu.cn/approval/openapi/v2
+  message_uri: https://open.feishu.cn/open-apis/message/v4
+  contact_uri: https://open.feishu.cn/open-apis/contact/v3
+  im_uri: https://open.feishu.cn/open-apis/im/v1
+  encrypt_key: beijing_encrypt_key
+  redis_url: redis://localhost:6379/0
+  jiangsu:
+    app_id: cli_jiangsu
+    app_secret: jiangsu_secret
+    uri: https://open.feishu.cn/open-apis
+    approval_uri: https://www.feishu.cn/approval/openapi/v2
+    message_uri: https://open.feishu.cn/open-apis/message/v4
+    contact_uri: https://open.feishu.cn/open-apis/contact/v3
+    im_uri: https://open.feishu.cn/open-apis/im/v1
+    encrypt_key: jiangsu_encrypt_key
+```
+
+无参数时兼容使用北京应用；其他应用必须用 `app:` 明确指定：
+
+```ruby
+Feishu::UserClient.new.get_user_info(open_id)
+Feishu::UserClient.new(app: :jiangsu).get_user_info(open_id)
+Feishu::AccessToken.new(app: :jiangsu).tenant_access_token
+Feishu.parse_callback(encrypted, app: :jiangsu)
+```
+
+使用 user token 时，token 仍是第一个位置参数：
+
+```ruby
+Feishu::UserClient.new(user_access_token, app: :jiangsu)
+```
+
+每个 client 都固定持有自己的 app 配置和 token。不同 app 的并发请求不会共享
+HTTParty header 或 base URI。token Redis key 使用 `app_id` 隔离。
+
+Rails 下 API 日志写入 `log/feishu_api.log`，包含 app、app_id、API、耗时和错误。
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```shell
+bundle install
+bundle exec rspec
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/feishu.
+Bug reports and pull requests are managed at https://github.com/guanyun/feishu-rails.
 

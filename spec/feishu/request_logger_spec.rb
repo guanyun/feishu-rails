@@ -12,11 +12,9 @@ RSpec.describe Feishu::RequestLogger do
     allow(described_class).to receive(:log_path).and_return(log_path)
     described_class.reset!
     allow(Feishu).to receive(:config).and_return(OpenStruct.new(app_id: 'cli_test'))
-    Thread.current['company'] = 'jiangsu'
   end
 
   after do
-    Thread.current['company'] = nil
     described_class.reset!
     FileUtils.remove_entry(log_dir) if Dir.exist?(log_dir)
   end
@@ -41,6 +39,8 @@ RSpec.describe Feishu::RequestLogger do
   describe '.track' do
     it 'logs company, client, api and params as multiline text' do
       described_class.track(
+        app: :jiangsu,
+        app_id: 'cli_test',
         client: 'Feishu::UserClient',
         method: :get,
         path: '/contact/v3/users/1',
@@ -48,6 +48,7 @@ RSpec.describe Feishu::RequestLogger do
       ) { { 'ok' => true } }
 
       expect(last_entry).to include(
+        'thread_id' => Thread.current.object_id.to_s,
         'company' => 'jiangsu',
         'app_id' => 'cli_test',
         'client' => 'Feishu::UserClient',
@@ -60,7 +61,13 @@ RSpec.describe Feishu::RequestLogger do
 
     it 'logs failures with error details' do
       expect do
-        described_class.track(client: 'Feishu::ApprovalClient', method: :post, path: '/approval/v4/instances') do
+        described_class.track(
+          app: :beijing,
+          app_id: 'cli_test',
+          client: 'Feishu::ApprovalClient',
+          method: :post,
+          path: '/approval/v4/instances'
+        ) do
           raise Feishu::ResponseError.new(10_001, 'invalid param')
         end
       end.to raise_error(Feishu::ResponseError)
@@ -72,12 +79,37 @@ RSpec.describe Feishu::RequestLogger do
       expect(last_entry['error']).to include('invalid param')
     end
 
-    it 'defaults blank company to beijing' do
-      Thread.current['company'] = nil
+    it 'rejects a nil or blank app' do
+      [nil, ''].each do |app|
+        expect do
+          described_class.track(
+            app: app,
+            app_id: 'cli_test',
+            client: 'Feishu::Client',
+            method: :get,
+            path: '/ping'
+          ) { true }
+        end.to raise_error(ArgumentError, 'Feishu app is required')
+      end
+    end
+  end
 
-      described_class.track(client: 'Feishu::Client', method: :get, path: '/ping') { true }
+  describe 'log timestamp' do
+    it 'uses the current Rails time zone' do
+      original_zone = Time.zone
+      Time.zone = 'Beijing'
+      formatter = described_class.send(:build_logger).formatter
 
-      expect(last_entry['company']).to eq('beijing')
+      output = formatter.call(
+        Logger::INFO,
+        Time.utc(2026, 8, 3, 4, 30),
+        nil,
+        'message'
+      )
+
+      expect(output).to start_with('[2026-08-03 12:30:00] message')
+    ensure
+      Time.zone = original_zone
     end
   end
 end

@@ -4,6 +4,7 @@ require 'json'
 require 'logger'
 require 'fileutils'
 require 'tmpdir'
+require 'active_support/time'
 
 module Feishu
   # 将飞书 API 调用写入独立日志，便于多应用排查。
@@ -13,17 +14,20 @@ module Feishu
     class << self
       attr_writer :logger
 
-      # 包装一次 API 调用并记录 company / client / api / params。
-      def track(client:, method:, path:, params: nil)
+      # 包装一次 API 调用并记录 app / client / api / params。
+      def track(client:, method:, path:, app:, app_id:, params: nil)
         started_at = monotonic_time
-        app = current_app
         api = format_api(method, path)
+        app_context = { company: app, app_id: app_id }
+        raise ArgumentError, 'Feishu app is required' if app.nil? || app.to_s.empty?
+
+        app_context[:company] = app.to_sym
 
         result = yield
         success, error_message = result_status(result)
 
         write(
-          app: app,
+          app: app_context,
           client: client,
           api: api,
           params: params,
@@ -34,7 +38,7 @@ module Feishu
         result
       rescue StandardError => e
         write(
-          app: app,
+          app: app_context,
           client: client,
           api: api,
           params: params,
@@ -44,21 +48,6 @@ module Feishu
           error_class: e.class.name
         )
         raise
-      end
-
-      # 当前线程绑定的公司与 app_id。
-      def current_app
-        company = Thread.current['company']
-        company = 'beijing' if company.nil? || company == ''
-
-        app_id =
-          begin
-            Feishu.config.app_id
-          rescue StandardError
-            nil
-          end
-
-        { company: company, app_id: app_id }
       end
 
       # 重置 logger，便于测试。
@@ -86,7 +75,7 @@ module Feishu
 
         Logger.new(file).tap do |log|
           log.formatter = proc do |_severity, datetime, _progname, msg|
-            "[#{datetime.strftime('%Y-%m-%d %H:%M:%S')}] #{msg}\n"
+            "[#{datetime.in_time_zone.strftime('%Y-%m-%d %H:%M:%S')}] #{msg}\n"
           end
         end
       end
@@ -115,6 +104,7 @@ module Feishu
 
       def write(app:, client:, api:, params:, success:, duration_ms:, error: nil, error_class: nil)
         lines = [
+          "thread_id=#{Thread.current.object_id}",
           "company=#{app[:company]}",
           "app_id=#{app[:app_id]}",
           "client=#{client}",

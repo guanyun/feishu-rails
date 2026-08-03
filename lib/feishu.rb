@@ -1,10 +1,13 @@
 require 'httparty'
 require 'redis'
 require 'json'
+require 'ostruct'
 require 'feishu/version'
 require 'feishu/config'
 
 module Feishu
+  DEFAULT_APP = :beijing
+
   class AccessTokenExpiredError < RuntimeError; end
   class UserTokenNeedRefresh < RuntimeError; end
   class UserTokenExpiredError < RuntimeError; end
@@ -24,7 +27,9 @@ module Feishu
   module_function
 
   def redis_url
-    url = config.redis_url.presence || ENV['REDIS_URL'].presence
+    configured_url = config(DEFAULT_APP).redis_url
+    url = configured_url unless configured_url.nil? || configured_url == ''
+    url ||= ENV['REDIS_URL'] unless ENV['REDIS_URL'].nil? || ENV['REDIS_URL'] == ''
     return url if url
 
     raise ArgumentError, "Feishu redis_url is missing: set config.redis_url or ENV['REDIS_URL']"
@@ -34,16 +39,62 @@ module Feishu
     @redis ||= Redis.new(url: redis_url)
   end
 
-  def config
-    subco = Thread.current['company']
-    feishu_config = Config.for(:feishu)
-    selected_config = subco.blank? ? feishu_config : feishu_config[subco]
-    OpenStruct.new(selected_config) # rubocop:disable Style/OpenStructUse
+  def config(app = DEFAULT_APP)
+    app = normalize_app(app)
+    root_config = Config.for(:feishu)
+    selected_config =
+      if app == DEFAULT_APP
+        root_config
+      else
+        root_config[app] || root_config[app.to_s]
+      end
+
+    unless selected_config
+      raise ArgumentError, "Unknown Feishu app: #{app.inspect}"
+    end
+
+    attributes =
+      if selected_config.respond_to?(:to_h)
+        selected_config.to_h
+      else
+        selected_config
+      end
+    application_config = OpenStruct.new(attributes) # rubocop:disable Style/OpenStructUse
+
+    missing = %i[app_id app_secret uri].select do |key|
+      value = application_config.public_send(key)
+      value.nil? || value == ''
+    end
+    unless missing.empty?
+      raise ArgumentError, "Feishu app #{app.inspect} is missing: #{missing.join(', ')}"
+    end
+
+    application_config
   end
 
-  def cipher
+  def normalize_app(app)
+    value = app.nil? || app.to_s.empty? ? DEFAULT_APP : app.to_sym
+    value
+  end
+
+  def cipher(app: DEFAULT_APP)
     require 'feishu/cipher'
-    Cipher.new(config.encrypt_key)
+    Cipher.new(config(app).encrypt_key)
+  end
+
+  def parse_callback(encrypted, app:)
+    app = normalize_app(app)
+    app_config = config(app)
+    callback = cipher(app: app).decrypt(encrypted)
+
+    RequestLogger.track(
+      app: app,
+      app_id: app_config.app_id,
+      client: 'Feishu::Callback',
+      method: :callback,
+      path: '/callbacks',
+      params: { callback: callback }
+    ) { callback }
   end
 end
 

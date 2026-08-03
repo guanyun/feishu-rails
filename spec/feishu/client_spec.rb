@@ -11,10 +11,16 @@ RSpec.describe Feishu::Client do
   before do
     allow(Feishu::RequestLogger).to receive(:log_path).and_return(File.join(log_dir, 'feishu_api.log'))
     Feishu::RequestLogger.reset!
+    allow(Feishu).to receive(:config) do |app = Feishu::DEFAULT_APP|
+      OpenStruct.new(
+        app_id: "cli_#{app}",
+        app_secret: "secret_#{app}",
+        uri: "https://#{app}.example/open-apis"
+      )
+    end
     allow(Feishu::AccessToken).to receive(:new).and_return(access_token)
     allow(access_token).to receive(:tenant_access_token).and_return('tenant-token-1', 'tenant-token-2')
     allow(access_token).to receive(:clear_cache)
-    allow(Feishu::Client).to receive(:default_options).and_return({})
   end
 
   after do
@@ -77,6 +83,18 @@ RSpec.describe Feishu::Client do
       expect(Feishu::Client).to have_received(:get).twice
     end
 
+    it 'refreshes the token for the client app' do
+      jiangsu_client = described_class.new(app: :jiangsu)
+      stub_get_responses(expired, ok)
+
+      jiangsu_client.get('/ping')
+
+      expect(Feishu::AccessToken).to have_received(:new)
+        .with(app: :jiangsu)
+        .at_least(:once)
+      expect(access_token).to have_received(:clear_cache).once
+    end
+
     it 'does not retry when initialized with a user token' do
       user_client = described_class.new('user-token')
       stub_get_responses(expired)
@@ -98,6 +116,38 @@ RSpec.describe Feishu::Client do
       allow(Feishu::Client).to receive(:put).and_return(response)
 
       expect(client.put('/sheets/v2/values', body: {})).to be_nil
+    end
+  end
+
+  describe 'explicit app isolation' do
+    it 'keeps URL and authorization scoped to each client instance' do
+      allow(Feishu::AccessToken).to receive(:new) do |app:|
+        instance_double(
+          Feishu::AccessToken,
+          tenant_access_token: "token-#{app}"
+        )
+      end
+      response = instance_double(
+        HTTParty::Response,
+        parsed_response: { 'code' => 0, 'data' => { 'ok' => true } }
+      )
+      allow(Feishu::Client).to receive(:get).and_return(response)
+
+      beijing = described_class.new
+      jiangsu = described_class.new(app: :jiangsu)
+      beijing.get('/ping')
+      jiangsu.get('/ping')
+
+      expect(Feishu::Client).to have_received(:get).with(
+        'https://beijing.example/open-apis/ping',
+        headers: hash_including(Authorization: 'Bearer token-beijing'),
+        query: {}
+      )
+      expect(Feishu::Client).to have_received(:get).with(
+        'https://jiangsu.example/open-apis/ping',
+        headers: hash_including(Authorization: 'Bearer token-jiangsu'),
+        query: {}
+      )
     end
   end
 end

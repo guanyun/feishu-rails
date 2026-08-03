@@ -2,11 +2,8 @@ require 'feishu/api/approval'
 
 module Feishu
   class ApprovalClient < Client
+    BASE_URI_CONFIG_KEY = :approval_uri
+
     include Feishu::Api::Approval
-    
-    def initialize
-      super
-      self.class.base_uri(Feishu.config.approval_uri)
-    end
   end
 end
