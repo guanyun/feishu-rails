@@ -8,6 +8,7 @@ require 'feishu/config'
 
 module Feishu
   DEFAULT_APP = :beijing
+  DEFAULT_TIMEOUT = 10
 
   class AccessTokenExpiredError < RuntimeError; end
   class UserTokenNeedRefresh < RuntimeError; end
@@ -36,6 +37,11 @@ module Feishu
 
   def redis
     @redis ||= Redis.new(url: redis_url)
+  end
+
+  def timeout
+    value = Config.for(:feishu)[:timeout].to_i
+    value.positive? ? value : DEFAULT_TIMEOUT
   end
 
   def config(app = DEFAULT_APP)

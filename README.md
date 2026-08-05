@@ -29,6 +29,7 @@ feishu:
   im_uri: https://open.feishu.cn/open-apis/im/v1
   encrypt_key: beijing_encrypt_key
   redis_url: redis://localhost:6379/0
+  timeout: 10
   jiangsu:
     app_id: cli_jiangsu
     app_secret: jiangsu_secret
@@ -59,6 +60,13 @@ Feishu::UserClient.new(user_access_token, app: :jiangsu)
 HTTParty header 或 base URI。token Redis key 使用 `app_id` 隔离。
 
 Rails 下 API 日志写入 `log/feishu_api.log`，包含 app、app_id、API、耗时和错误。
+
+HTTP 请求默认超时 10 秒，可在根配置中通过 `timeout` 覆盖：
+
+```yaml
+feishu:
+  timeout: 15
+```
 
 ## Development
 

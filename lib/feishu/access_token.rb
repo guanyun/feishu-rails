@@ -63,7 +63,7 @@ module Feishu
         path: path,
         params: body.nil? ? nil : { body: body }
       ) do
-        self.class.post(api_url(path), **options)
+        self.class.post(api_url(path), **options, timeout: Feishu.timeout)
       end
     end
 

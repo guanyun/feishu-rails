@@ -22,26 +22,26 @@ RSpec.describe Feishu do
   end
 
   describe '.config' do
-    it 'uses beijing by default' do
+    it '默认使用北京应用' do
       expect(described_class.config.app_id).to eq('cli_beijing')
     end
 
-    it 'selects an app explicitly by symbol or string' do
+    it '可通过 symbol 或 string 指定应用' do
       expect(described_class.config(:jiangsu).app_id).to eq('cli_jiangsu')
       expect(described_class.config('jiangsu').app_id).to eq('cli_jiangsu')
     end
 
-    it 'treats a blank app as beijing for compatibility' do
+    it '空 app 兼容为北京' do
       expect(described_class.config(nil).app_id).to eq('cli_beijing')
       expect(described_class.config('').app_id).to eq('cli_beijing')
     end
 
-    it 'rejects an unknown app' do
+    it '未知 app 抛错' do
       expect { described_class.config(:unknown) }
         .to raise_error(ArgumentError, 'Unknown Feishu app: :unknown')
     end
 
-    it 'rejects an incomplete app config' do
+    it '配置不完整时抛错' do
       root_config.jiangsu = { app_id: 'cli_jiangsu' }
 
       expect { described_class.config(:jiangsu) }

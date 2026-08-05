@@ -37,7 +37,7 @@ RSpec.describe Feishu::RequestLogger do
   end
 
   describe '.track' do
-    it 'logs company, client, api and params as multiline text' do
+    it '记录 app、client、api 和 params' do
       described_class.track(
         app: :jiangsu,
         app_id: 'cli_test',
@@ -59,7 +59,7 @@ RSpec.describe Feishu::RequestLogger do
       expect(File.read(log_path)).to end_with("\n\n")
     end
 
-    it 'logs failures with error details' do
+    it '失败时记录错误详情' do
       expect do
         described_class.track(
           app: :beijing,
@@ -79,7 +79,7 @@ RSpec.describe Feishu::RequestLogger do
       expect(last_entry['error']).to include('invalid param')
     end
 
-    it 'rejects a nil or blank app' do
+    it 'app 为空时抛错' do
       [nil, ''].each do |app|
         expect do
           described_class.track(
@@ -94,8 +94,8 @@ RSpec.describe Feishu::RequestLogger do
     end
   end
 
-  describe 'log timestamp' do
-    it 'uses the current Rails time zone' do
+  describe '日志时间戳' do
+    it '使用 Rails 时区' do
       original_zone = Time.zone
       Time.zone = 'Beijing'
       formatter = described_class.send(:build_logger).formatter

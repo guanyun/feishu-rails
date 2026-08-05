@@ -11,6 +11,7 @@ RSpec.describe Feishu::Client do
   before do
     allow(Feishu::RequestLogger).to receive(:log_path).and_return(File.join(log_dir, 'feishu_api.log'))
     Feishu::RequestLogger.reset!
+    allow(Feishu::Config).to receive(:for).with(:feishu).and_return({})
     allow(Feishu).to receive(:config) do |app = Feishu::DEFAULT_APP|
       OpenStruct.new(
         app_id: "cli_#{app}",
@@ -28,7 +29,7 @@ RSpec.describe Feishu::Client do
     FileUtils.remove_entry(log_dir) if Dir.exist?(log_dir)
   end
 
-  describe '#get token retry' do
+  describe 'GET 请求的 token 重试' do
     subject(:client) { described_class.new }
 
     let(:expired) { { 'code' => 99_991_663, 'msg' => 'token expired' } }
@@ -41,7 +42,7 @@ RSpec.describe Feishu::Client do
       allow(Feishu::Client).to receive(:get).and_return(*responses)
     end
 
-    it 'retries once after refreshing tenant authorization' do
+    it 'token 过期时刷新后重试一次' do
       stub_get_responses(expired, ok)
 
       expect(client.get('/ping')).to eq('name' => 'ok')
@@ -50,7 +51,7 @@ RSpec.describe Feishu::Client do
       expect(access_token).to have_received(:tenant_access_token).twice
     end
 
-    it 'logs both the failed attempt and the successful retry' do
+    it '失败与成功重试各记一条日志' do
       log_file = File.join(log_dir, 'feishu_api.log')
       File.write(log_file, '') if File.exist?(log_file)
       stub_get_responses(expired, ok)
@@ -76,14 +77,14 @@ RSpec.describe Feishu::Client do
       expect(entries[1]).to include('success' => 'true')
     end
 
-    it 'raises after the second AccessTokenExpiredError' do
+    it '连续两次 token 过期则抛错' do
       stub_get_responses(expired, expired)
 
       expect { client.get('/ping') }.to raise_error(Feishu::AccessTokenExpiredError)
       expect(Feishu::Client).to have_received(:get).twice
     end
 
-    it 'refreshes the token for the client app' do
+    it '按 client 所属应用刷新 token' do
       jiangsu_client = described_class.new(app: :jiangsu)
       stub_get_responses(expired, ok)
 
@@ -95,7 +96,7 @@ RSpec.describe Feishu::Client do
       expect(access_token).to have_received(:clear_cache).once
     end
 
-    it 'does not retry when initialized with a user token' do
+    it '用户 token 过期时不重试' do
       user_client = described_class.new('user-token')
       stub_get_responses(expired)
 
@@ -105,10 +106,10 @@ RSpec.describe Feishu::Client do
     end
   end
 
-  describe '#put' do
+  describe 'PUT 请求' do
     subject(:client) { described_class.new('user-token') }
 
-    it 'returns nil when user token needs refresh' do
+    it '用户 token 需刷新时返回 nil' do
       response = instance_double(
         HTTParty::Response,
         parsed_response: { 'code' => 99_991_677, 'msg' => 'need refresh' }
@@ -119,8 +120,8 @@ RSpec.describe Feishu::Client do
     end
   end
 
-  describe 'explicit app isolation' do
-    it 'keeps URL and authorization scoped to each client instance' do
+  describe '多应用隔离' do
+    it '各 client 实例使用独立的 URL 和 Authorization' do
       allow(Feishu::AccessToken).to receive(:new) do |app:|
         instance_double(
           Feishu::AccessToken,
@@ -141,12 +142,14 @@ RSpec.describe Feishu::Client do
       expect(Feishu::Client).to have_received(:get).with(
         'https://beijing.example/open-apis/ping',
         headers: hash_including(Authorization: 'Bearer token-beijing'),
-        query: {}
+        query: {},
+        timeout: 10
       )
       expect(Feishu::Client).to have_received(:get).with(
         'https://jiangsu.example/open-apis/ping',
         headers: hash_including(Authorization: 'Bearer token-jiangsu'),
-        query: {}
+        query: {},
+        timeout: 10
       )
     end
   end

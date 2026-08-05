@@ -11,6 +11,7 @@ module Feishu
                 :message_uri,
                 :contact_uri,
                 :im_uri,
-                :redis_url
+                :redis_url,
+                :timeout
   end
 end

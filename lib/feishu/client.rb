@@ -83,7 +83,7 @@ module Feishu
 
     def send_http(http_method, path, multipart:, query:, body:)
       url = api_url(path)
-      options = { headers: request_headers }
+      options = { headers: request_headers, timeout: Feishu.timeout }
 
       case http_method
       when :get
